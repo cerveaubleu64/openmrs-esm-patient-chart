@@ -3,7 +3,7 @@ import dayjs from 'dayjs';
 import { capitalize } from 'lodash-es';
 import { useTranslation } from 'react-i18next';
 import { useReactToPrint } from 'react-to-print';
-import { useSWRConfig } from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import {
   Button,
   DataTable,
@@ -56,13 +56,16 @@ import {
   getCoreTranslation,
   getPatientName,
   launchWorkspace2,
+  openmrsFetch,
   OpenmrsDateRangePicker,
   parseDate,
   PrinterIcon,
+  restBaseUrl,
   useConfig,
   useLayoutType,
   usePagination,
 } from '@openmrs/esm-framework';
+import { type ConfigObject } from '../config-schema';
 import { buildGeneralOrder, buildLabOrder, buildMedicationOrder } from '../utils';
 import { ORDER_TYPES, getOrderGrouping, isValidOmrsOrderType } from '../constants/order-types';
 import GeneralOrderTable from './general-order-table.component';
@@ -70,6 +73,18 @@ import MedicationRecord from './medication-record.component';
 import PrintComponent from '../print/print.component';
 import TestOrder from './test-order.component';
 import styles from './order-details-table.scss';
+
+/** Sentinel used in the order-type dropdown for imaging (which has no OrderType of its own). */
+const IMAGING_FILTER = 'imaging';
+
+/** Loads the UUIDs of the imaging concept set's members, to tell imaging orders from procedure orders. */
+function useImagingConceptUuids(setUuid?: string): Set<string> {
+  const { data } = useSWR<{ data: { setMembers: Array<{ uuid: string }> } }>(
+    setUuid ? `${restBaseUrl}/concept/${setUuid}?v=custom:(setMembers:(uuid))` : null,
+    openmrsFetch,
+  );
+  return useMemo(() => new Set((data?.data?.setMembers ?? []).map((m) => m.uuid)), [data]);
+}
 
 interface OrderDetailsProps {
   patientUuid: string;
@@ -134,12 +149,23 @@ const OrderDetailsTable: React.FC<OrderDetailsProps> = ({
   const responsiveSize = isTablet ? 'lg' : 'md';
   const _launchOrderBasket = useLaunchWorkspaceRequiringVisit(patientUuid, 'order-basket');
   const contentToPrintRef = useRef<HTMLDivElement | null>(null);
-  const { excludePatientIdentifierCodeTypes } = useConfig();
+  const { excludePatientIdentifierCodeTypes, imagingConceptSetUuid, procedureOrderTypeUuid } = useConfig<
+    ConfigObject & { excludePatientIdentifierCodeTypes?: { uuids?: Array<string> } }
+  >();
   const [isPrinting, setIsPrinting] = useState(false);
   const { data: orderTypes } = useOrderTypes();
-  const [selectedOrderTypeUuid, setSelectedOrderTypeUuid] = useState(null);
-  // UI-controlled date range
-  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([new Date(), new Date()]);
+  const [selectedOrderTypeUuid, setSelectedOrderTypeUuid] = useState<string | null>(null);
+  // Imaging and procedure orders share one OrderType; the imaging concept set tells them apart.
+  const imagingConceptUuids = useImagingConceptUuids(imagingConceptSetUuid);
+  const isImagingOrder = useCallback(
+    (order: Order) => Boolean(order?.concept?.uuid && imagingConceptUuids.has(order.concept.uuid)),
+    [imagingConceptUuids],
+  );
+  // UI-controlled date range. Defaults wide so all orders show by default (not just today's).
+  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([
+    dayjs().subtract(10, 'year').toDate(),
+    new Date(),
+  ]);
   // Derived API filter dates (ISO strings)
   const [startDate, endDate] = dateRange;
   const selectedFromDate = useMemo(() => (startDate ? dayjs(startDate).format('YYYY-MM-DD') : null), [startDate]);
@@ -192,14 +218,28 @@ const OrderDetailsTable: React.FC<OrderDetailsProps> = ({
     [t],
   );
 
+  // Imaging has no OrderType of its own, so query the shared procedure OrderType and filter client-side.
+  const apiOrderTypeUuid =
+    selectedOrderTypeUuid === IMAGING_FILTER ? procedureOrderTypeUuid : (selectedOrderTypeUuid ?? undefined);
+
   const {
     data: allOrders,
     error,
     isLoading,
     isValidating,
-  } = usePatientOrders(patientUuid, 'ACTIVE', selectedOrderTypeUuid, selectedFromDate, selectedToDate);
+  } = usePatientOrders(patientUuid, 'ACTIVE', apiOrderTypeUuid, selectedFromDate, selectedToDate);
 
-  const displayedOrders = useMemo(() => allOrders ?? [], [allOrders]);
+  const displayedOrders = useMemo(() => {
+    const orders = allOrders ?? [];
+    // Split the shared procedure OrderType into imaging vs procedure when one is selected.
+    if (selectedOrderTypeUuid === IMAGING_FILTER) {
+      return orders.filter((order) => isImagingOrder(order));
+    }
+    if (procedureOrderTypeUuid && selectedOrderTypeUuid === procedureOrderTypeUuid) {
+      return orders.filter((order) => !isImagingOrder(order));
+    }
+    return orders;
+  }, [allOrders, selectedOrderTypeUuid, procedureOrderTypeUuid, isImagingOrder]);
 
   const launchOrderBasketForNewItem = useCallback(
     () => _launchOrderBasket(null, { encounterUuid: '' }),
@@ -259,7 +299,9 @@ const OrderDetailsTable: React.FC<OrderDetailsProps> = ({
         dateActivated: order.dateActivated,
         orderNumber: order.orderNumber,
         dateOfOrder: <div className={styles.singleLineText}>{formatDate(parseDate(order.dateActivated))}</div>,
-        orderType: capitalize(order.orderType?.display ?? '-'),
+        orderType: isImagingOrder(order)
+          ? t('imagingOrderType', 'Imaging order')
+          : capitalize(order.orderType?.display ?? '-'),
         dosage:
           order.type === ORDER_TYPES.DRUG_ORDER ? (
             <div className={styles.singleLineText}>
@@ -370,6 +412,8 @@ const OrderDetailsTable: React.FC<OrderDetailsProps> = ({
         display: orderType.display,
         uuid: orderType.uuid,
       })) ?? []),
+      // Imaging shares the procedure OrderType, so surface it as its own filter option.
+      { display: t('imagingOrderType', 'Imaging order'), uuid: IMAGING_FILTER },
     ],
     [orderTypes, t],
   );

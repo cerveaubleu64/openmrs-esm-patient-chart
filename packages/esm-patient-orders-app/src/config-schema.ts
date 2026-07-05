@@ -71,6 +71,17 @@ export const configSchema = {
       'The name of the ordering location tag. If specified, the order baskets shows the order locations dropdown listing locations with the specified tag. The dropdown is hidden if this config value is not specified, and the order location defaults to the login location of the user.',
     _default: '',
   },
+  imagingConceptSetUuid: {
+    _type: Type.UUID,
+    _description:
+      'Concept set whose members are imaging examinations. Imaging and procedure orders share the same OrderType, so this set is used to tell them apart in the orders table and filter.',
+    _default: '39c6b411-12c7-43f7-afb6-d90c34db6dba',
+  },
+  procedureOrderTypeUuid: {
+    _type: Type.UUID,
+    _description: 'OrderType UUID shared by imaging and procedure orders.',
+    _default: 'b4a7c280-369e-4d12-9ce8-18e36783fed6',
+  },
 };
 
 export interface OrderTypeDefinition {
@@ -89,4 +100,6 @@ export interface ConfigObject {
   enableAddTestsDuringResultEntry: boolean;
   ordererProviderRoles: Array<string>;
   orderLocationTagName: string;
+  imagingConceptSetUuid: string;
+  procedureOrderTypeUuid: string;
 }
