@@ -49,6 +49,14 @@ export function OrderForm({
   setHasUnsavedChanges,
 }: OrderFormProps) {
   const { t } = useTranslation();
+  // Localized labels for the native order urgency values (the framework's
+  // priorityOptions labels are frozen module constants and cannot be translated
+  // via runtime config, so we relabel them here from this app's own namespace).
+  const priorityLabels: Record<string, string> = {
+    ROUTINE: t('orderPriorityRoutine', 'Routine'),
+    STAT: t('orderPriorityStat', 'Stat'),
+    ON_SCHEDULED_DATE: t('orderPriorityScheduled', 'Scheduled'),
+  };
   const isTablet = useLayoutType() === 'tablet';
   const { orders, setOrders, clearOrders } = useOrderBasket<OrderBasketItem>(patient, orderTypeUuid, prepOrderPostData);
   const { orderType } = useOrderType(orderTypeUuid);
@@ -235,7 +243,11 @@ export function OrderForm({
                       labelText={t('priority', 'Priority')}
                     >
                       {priorityOptions.map((option) => (
-                        <SelectItem key={option.value} text={option.label} value={option.value} />
+                        <SelectItem
+                          key={option.value}
+                          text={priorityLabels[option.value] ?? option.label}
+                          value={option.value}
+                        />
                       ))}
                     </Select>
                   )}
