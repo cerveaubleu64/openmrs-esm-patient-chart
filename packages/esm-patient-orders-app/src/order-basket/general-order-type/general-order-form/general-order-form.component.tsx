@@ -63,6 +63,16 @@ export function OrderForm({
   const config = useConfig<ConfigObject>();
   const { mutate: mutateOrders } = useMutatePatientOrders(patient.id);
 
+  // Laterality is a property of org.openmrs.TestOrder, so the field is only
+  // shown for order types backed by that Java class.
+  const isTestOrderType = orderType?.javaClassName === 'org.openmrs.TestOrder';
+  const lateralityOptions = [
+    { value: '', label: t('lateralityNotSpecified', 'Not specified') },
+    { value: 'LEFT', label: t('lateralityLeft', 'Left') },
+    { value: 'RIGHT', label: t('lateralityRight', 'Right') },
+    { value: 'BILATERAL', label: t('lateralityBilateral', 'Bilateral') },
+  ];
+
   const OrderFormSchema = useMemo(
     () =>
       z
@@ -72,6 +82,7 @@ export function OrderForm({
             message: t('priorityRequired', 'Priority is required'),
           }),
           accessionNumber: z.string().nullish(),
+          laterality: z.string().nullish(),
           concept: z.object(
             { display: z.string(), uuid: z.string() },
             {
@@ -99,6 +110,7 @@ export function OrderForm({
     resolver: zodResolver(OrderFormSchema),
     defaultValues: {
       ...initialOrder,
+      laterality: initialOrder?.laterality ?? '',
     },
   });
 
@@ -109,6 +121,7 @@ export function OrderForm({
       const finalizedOrder: OrderBasketItem = {
         ...initialOrder,
         ...data,
+        orderTypeJavaClassName: orderType?.javaClassName ?? initialOrder?.orderTypeJavaClassName,
       };
 
       const newOrders = [...orders];
@@ -128,7 +141,7 @@ export function OrderForm({
 
       closeWorkspace({ discardUnsavedChanges: true });
     },
-    [orders, setOrders, initialOrder, closeWorkspace],
+    [orders, setOrders, initialOrder, closeWorkspace, orderType?.javaClassName],
   );
 
   const submitOrderToServer = useCallback(
@@ -136,6 +149,7 @@ export function OrderForm({
       const finalizedOrder: OrderBasketItem = {
         ...initialOrder,
         ...data,
+        orderTypeJavaClassName: orderType?.javaClassName ?? initialOrder?.orderTypeJavaClassName,
       };
 
       return postOrder(
@@ -160,7 +174,16 @@ export function OrderForm({
           });
         });
     },
-    [clearOrders, closeWorkspace, initialOrder, mutateOrders, patient.id, orderToEditOrdererUuid, t],
+    [
+      clearOrders,
+      closeWorkspace,
+      initialOrder,
+      mutateOrders,
+      patient.id,
+      orderToEditOrdererUuid,
+      t,
+      orderType?.javaClassName,
+    ],
   );
 
   const onError = (errors: FieldErrors<OrderBasketItem>) => {
@@ -254,6 +277,29 @@ export function OrderForm({
                 />
               </InputWrapper>
             </Column>
+            {isTestOrderType && (
+              <Column lg={8} md={8} sm={4}>
+                <InputWrapper>
+                  <Controller
+                    name="laterality"
+                    control={control}
+                    render={({ field, fieldState }) => (
+                      <Select
+                        id="lateralityInput"
+                        {...field}
+                        invalid={Boolean(fieldState?.error)}
+                        invalidText={fieldState?.error?.message}
+                        labelText={t('laterality', 'Laterality')}
+                      >
+                        {lateralityOptions.map((option) => (
+                          <SelectItem key={option.value} text={option.label} value={option.value} />
+                        ))}
+                      </Select>
+                    )}
+                  />
+                </InputWrapper>
+              </Column>
+            )}
           </Grid>
           {isScheduledDateRequired && (
             <Grid className={styles.gridRow}>

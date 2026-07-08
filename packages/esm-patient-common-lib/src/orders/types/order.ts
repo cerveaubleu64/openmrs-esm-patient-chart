@@ -65,6 +65,14 @@ export interface OrderBasketItem {
   concept?: Concept;
   instructions?: string;
   urgency?: OrderUrgency;
+  /**
+   * The laterality of the order. Only applicable to orders whose order type maps to org.openmrs.TestOrder.
+   */
+  laterality?: OrderLaterality | '';
+  /**
+   * The Java class name of the order's order type. Used to determine the REST order subtype to post.
+   */
+  orderTypeJavaClassName?: string;
   previousOrder?: string;
   orderType?: string;
   orderNumber?: string;
@@ -74,6 +82,8 @@ export interface OrderBasketItem {
 }
 
 export type OrderUrgency = 'ROUTINE' | 'STAT' | 'ON_SCHEDULED_DATE';
+
+export type OrderLaterality = 'LEFT' | 'RIGHT' | 'BILATERAL';
 
 export type PriorityOption = {
   label: string;
@@ -98,6 +108,7 @@ export interface OrderPost {
   accessionNumber?: string;
   orderType?: string;
   scheduledDate?: string;
+  laterality?: OrderLaterality;
 }
 
 export interface DrugOrderPost extends OrderPost {

@@ -9,13 +9,19 @@ import {
   type PostDataPrepFunction,
 } from '@openmrs/esm-patient-common-lib';
 
-export function createEmptyOrder(concept: OrderableConcept, visit: Visit): OrderBasketItem {
+export function createEmptyOrder(
+  concept: OrderableConcept,
+  visit: Visit,
+  orderTypeJavaClassName?: string,
+): OrderBasketItem {
   return {
     action: 'NEW',
     urgency: priorityOptions[0].value as OrderUrgency,
     display: concept.display,
     concept,
     visit,
+    laterality: '',
+    orderTypeJavaClassName,
   };
 }
 
@@ -29,10 +35,17 @@ export const prepOrderPostData: PostDataPrepFunction = (
   encounterUuid,
   orderingProviderUuid,
 ): OrderPost => {
+  // Orders whose order type maps to org.openmrs.TestOrder must be posted with the
+  // 'testorder' REST subtype, which also supports test-order-specific properties
+  // such as laterality.
+  const isTestOrder = order.orderTypeJavaClassName === 'org.openmrs.TestOrder';
+  const type = isTestOrder ? 'testorder' : 'order';
+  const laterality = isTestOrder && order.laterality ? order.laterality : undefined;
+
   if (order.action === 'NEW' || order.action === 'RENEW') {
     return {
       action: 'NEW',
-      type: 'order',
+      type,
       patient: patientUuid,
       careSetting: careSettingUuid,
       orderer: orderingProviderUuid,
@@ -42,12 +55,13 @@ export const prepOrderPostData: PostDataPrepFunction = (
       // orderReason: order.orderReason,
       accessionNumber: order.accessionNumber,
       urgency: order.urgency,
+      laterality,
       scheduledDate: order.scheduledDate ? toOmrsIsoString(order.scheduledDate) : null,
     };
   } else if (order.action === 'REVISE') {
     return {
       action: 'REVISE',
-      type: 'order',
+      type,
       patient: patientUuid,
       careSetting: careSettingUuid,
       orderer: orderingProviderUuid,
@@ -57,12 +71,13 @@ export const prepOrderPostData: PostDataPrepFunction = (
       previousOrder: order.previousOrder,
       accessionNumber: order.accessionNumber,
       urgency: order.urgency,
+      laterality,
       scheduledDate: order.scheduledDate ? toOmrsIsoString(order.scheduledDate) : null,
     };
   } else if (order.action === 'DISCONTINUE') {
     return {
       action: 'DISCONTINUE',
-      type: 'order',
+      type,
       patient: patientUuid,
       careSetting: careSettingUuid,
       orderer: orderingProviderUuid,

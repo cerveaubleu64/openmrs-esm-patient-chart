@@ -14,6 +14,7 @@ import {
   type OrderBasketItem,
   type OrderableConcept,
   useOrderBasket,
+  useOrderType,
   useOrderableConceptSets,
 } from '@openmrs/esm-patient-common-lib';
 import { createEmptyOrder, prepOrderPostData } from '../resources';
@@ -164,6 +165,7 @@ const TestTypeSearchResultItem: React.FC<TestTypeSearchResultItemProps> = ({
   const { t } = useTranslation();
   const isTablet = useLayoutType() === 'tablet';
   const { orders, setOrders } = useOrderBasket<OrderBasketItem>(patient, orderTypeUuid, prepOrderPostData);
+  const { orderType } = useOrderType(orderTypeUuid);
 
   const orderAlreadyInBasket = useMemo(
     () => orders?.some((order) => order.concept.uuid === concept.uuid),
@@ -171,11 +173,11 @@ const TestTypeSearchResultItem: React.FC<TestTypeSearchResultItemProps> = ({
   );
 
   const addToBasket = useCallback(() => {
-    const orderBasketItem = createEmptyOrder(concept, visit);
+    const orderBasketItem = createEmptyOrder(concept, visit, orderType?.javaClassName);
     orderBasketItem.isOrderIncomplete = true;
     setOrders([...orders, orderBasketItem]);
     closeWorkspace({ discardUnsavedChanges: true });
-  }, [orders, setOrders, concept, closeWorkspace, visit]);
+  }, [orders, setOrders, concept, closeWorkspace, visit, orderType?.javaClassName]);
 
   const removeFromBasket = useCallback(() => {
     setOrders(orders.filter((order) => order?.concept?.uuid !== concept?.uuid));
@@ -214,7 +216,7 @@ const TestTypeSearchResultItem: React.FC<TestTypeSearchResultItemProps> = ({
         <Button
           kind="ghost"
           renderIcon={(props: ComponentProps<typeof ArrowRightIcon>) => <ArrowRightIcon size={16} {...props} />}
-          onClick={() => openOrderForm(createEmptyOrder(concept, visit))}
+          onClick={() => openOrderForm(createEmptyOrder(concept, visit, orderType?.javaClassName))}
         >
           {t('goToDrugOrderForm', 'Order form')}
         </Button>

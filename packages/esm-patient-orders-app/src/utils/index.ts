@@ -144,6 +144,9 @@ export function buildGeneralOrder(order: Order, action?: OrderAction): OrderBask
     concept: order.concept,
     orderNumber: order.orderNumber,
     orderType: order.orderType.uuid,
+    // The REST `type` property is 'testorder' for orders backed by org.openmrs.TestOrder
+    orderTypeJavaClassName: order.type === 'testorder' ? 'org.openmrs.TestOrder' : 'org.openmrs.Order',
+    laterality: (order.laterality as OrderBasketItem['laterality']) ?? '',
     scheduledDate: order.scheduledDate ? new Date(order.scheduledDate) : null,
     encounterUuid: order.encounter?.uuid,
     visit: order.encounter.visit,
